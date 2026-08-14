@@ -1,0 +1,311 @@
+---
+title: "Principal Component Analysis of the Hitters Dataset"
+author: "Shradha Upadhyay"
+date: "2026-08-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Principal Component Analysis of the Hitters Dataset
+
+## Objective
+
+This analysis performs Principal Component Analysis (PCA) on the predictor variables of the Hitters dataset. The goal is to examine the structure of the predictor variables, determine an appropriate number of principal components, and interpret the first two principal components.
+
+Salary is the response variable and is excluded from the PCA.
+
+## Dataset Overview
+
+The `Hitters` dataset from the **ISLR** package contains Major League Baseball player statistics and salary information.
+
+The original dataset contains **322 players and 20 variables**. After removing observations with missing salary values, **263 players** remain for the analysis.
+
+The variables include:
+
+- **Current-season performance:** `AtBat`, `Hits`, `HmRun`, `Runs`, `RBI`, and `Walks`
+- **Career performance:** `CAtBat`, `CHits`, `CHmRun`, `CRuns`, `CRBI`, and `CWalks`
+- **Experience:** `Years`
+- **Fielding statistics:** `PutOuts`, `Assists`, and `Errors`
+- **Categorical information:** `League`, `Division`, and `NewLeague`
+- **Response variable:** `Salary`
+
+Because the objective is to perform PCA on the predictors, `Salary` is excluded from the PCA analysis.
+```{r}
+# Load required libraries
+library(ISLR)
+
+# Load the Hitters dataset
+data(Hitters)
+```
+
+```{r}
+# Check the dimensions of the dataset
+dim(Hitters)
+```
+```{r}
+# View variable names
+names(Hitters)
+```
+```{r}
+# View the first few observations
+head(Hitters)
+```
+## Data Preparation
+```{r}
+# Check the number of missing values in each variable
+colSums(is.na(Hitters))
+```
+```{r}
+# Remove observations with missing values
+Hitters_clean <- na.omit(Hitters)
+
+# Check dimensions after removing missing values
+dim(Hitters_clean)
+```
+
+## Predictor Variables
+```{r}
+# Check the structure and data types of the variables
+str(Hitters_clean)
+```
+## (a)  Should the Predictors Be Standardized?
+
+Yes. Standardization is appropriate because the Hitters predictors are measured on very different scales. For example, career statistics such as `CAtBat` can be in the thousands, whereas `Years` is much smaller.
+
+Without standardization, variables with larger variances could dominate the principal components. Standardizing the predictors to mean 0 and standard deviation 1 allows PCA to compare variables on a common scale.
+## (b) Principal Component Analysis
+
+For the PCA, `Salary` is excluded because it is the response variable. The analysis is performed using only the predictor variables.
+```{r}
+# Remove Salary and keep only the predictor variables
+X <- Hitters_clean[, names(Hitters_clean) != "Salary"]
+
+# Check dimensions
+dim(X)
+```
+
+```{r}
+# Identify categorical predictor variables
+names(X)[sapply(X, is.factor)]
+```
+```{r}
+# Convert categorical predictors to dummy variables
+X_numeric <- model.matrix(~ ., data = X)[, -1]
+
+# Check dimensions
+dim(X_numeric)
+```
+
+### Standardize the Predictor Variables
+Because the predictors are measured on different scales, the variables are standardized to have mean 0 and standard deviation 1 before performing PCA.
+```{r}
+# Standardize the predictor variables
+X_scaled <- scale(X_numeric)
+
+# Check the dimensions
+dim(X_scaled)
+# Check the mean and standard deviation of the standardized predictors
+round(colMeans(X_scaled), 3)
+# Check standard deviations
+round(apply(X_scaled, 2, sd), 3)
+```
+### Perform Principal Component Analysis
+
+PCA is performed on the standardized predictor variables to obtain a smaller set of uncorrelated principal components that summarize the variation in the original predictors.
+```{r}
+# Perform PCA on the standardized predictors
+pca_result <- prcomp(X_scaled)
+
+# View PCA summary
+summary(pca_result)
+```
+### Scree Plot
+
+A scree plot is used to examine how much variance is explained by each principal component and to help determine an appropriate number of components to retain.
+```{r}
+# Calculate proportion of variance explained by each PC
+variance_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Open PNG file
+png(
+  "Figures/variance_explained.png",
+  width = 800,
+  height = 600
+)
+
+# Plot proportion of variance explained
+plot(
+  variance_explained,
+  type = "b",
+  pch = 19,
+  xlab = "Principal Component",
+  ylab = "Proportion of Variance Explained",
+  main = "Variance Explained by Principal Components"
+)
+
+# Save and close the file
+dev.off()
+```
+### Interpretation
+
+The first principal component explains approximately **38.31%** of the total variance, while the second explains approximately **21.84%**. Together, the first two PCs explain about **60.16%** of the total variance.
+
+The scree plot shows a substantial decrease in explained variance over the first few components and begins to flatten after approximately PC3–PC4. The first four principal components together explain approximately **79.03%** of the total variance.
+
+Based on the scree plot and cumulative variance explained, retaining approximately **4 principal components** provides a reasonable lower-dimensional representation of the predictor data.
+
+### Variance Explained by Principal Components
+```{r}
+# Calculate cumulative variance explained
+cumulative_variance <- cumsum(variance_explained)
+
+# Create PCA variance table
+pca_variance_table <- data.frame(
+  PC = paste0("PC", 1:length(variance_explained)),
+  Variance_Explained = round(variance_explained, 4),
+  Cumulative_Variance = round(cumulative_variance, 4)
+)
+
+# Display the table
+pca_variance_table
+# Display the first 10 principal components
+head(pca_variance_table, 10)
+
+```
+## (c) Interpretation of the First Two Principal Components
+
+The first two principal components are examined using correlations with the standardized quantitative predictor variables, PC scores, loadings, and a biplot.
+```{r}
+# Identify quantitative predictor variables
+quantitative_vars <- names(X)[sapply(X, is.numeric)]
+
+# View quantitative variable names
+quantitative_vars
+
+```
+```{r}
+# Keep only the quantitative predictor variables
+X_quantitative <- X[, quantitative_vars]
+
+# Check dimensions
+dim(X_quantitative)
+```
+
+
+```{r}
+# Standardize the quantitative predictor variables
+X_quant_scaled <- scale(X_quantitative)
+
+# Check dimensions
+dim(X_quant_scaled)
+```
+
+```{r}
+# Extract scores for the first two principal components
+PC_scores <- pca_result$x[, 1:2]
+
+# Check dimensions
+dim(PC_scores)
+```
+
+```{r}
+# Calculate correlations between quantitative variables and PC1 and PC2
+pc_correlations <- cor(X_quant_scaled, PC_scores)
+
+# View correlations
+round(pc_correlations, 3)
+```
+
+### Correlation Interpretation
+
+PC1 is strongly positively correlated with career statistics such as `CRBI`, `CRuns`, `CAtBat`, `CHits`, `CHmRun`, and `CWalks`, as well as `Years`. Therefore, PC1 primarily represents **career experience and accumulated career performance**.
+
+PC2 is strongly positively correlated with current-season statistics such as `AtBat`, `Hits`, `Runs`, and `RBI`, while several career statistics have negative correlations with PC2. Therefore, PC2 appears to represent **current-season offensive performance relative to accumulated career performance**.
+
+### Correlations of Quantitative Variables with PC1 and PC2
+
+The correlations between the standardized quantitative predictors and the first two principal components are visualized below.
+
+```{r}
+# Save correlation plot
+png(
+  "Figures/pc1_pc2_correlations.png",
+  width = 800,
+  height = 600
+)
+
+plot(
+  pc_correlations[, 1],
+  pc_correlations[, 2],
+  xlab = "Correlation with PC1",
+  ylab = "Correlation with PC2",
+  main = "Correlations of Variables with PC1 and PC2",
+  pch = 19
+)
+
+text(
+  pc_correlations[, 1],
+  pc_correlations[, 2],
+  labels = rownames(pc_correlations),
+  pos = 3,
+  cex = 0.8
+)
+
+abline(h = 0, v = 0, lty = 2)
+
+dev.off()
+```
+### PC1 and PC2 Loadings
+```{r}
+# Extract loadings for PC1 and PC2
+loadings_pc12 <- pca_result$rotation[, 1:2]
+
+# Display the loadings
+round(loadings_pc12, 3)
+```
+
+### Biplot of PC1 and PC2
+
+The biplot displays the player scores on the first two principal components together with the variable loadings.
+```{r}
+# Save PCA biplot
+png(
+  "Figures/pca_biplot_pc1_pc2.png",
+  width = 900,
+  height = 700
+)
+
+biplot(
+  pca_result,
+  choices = c(1, 2),
+  xlabs = rep(".", nrow(pca_result$x)),
+  main = "PCA Biplot: PC1 and PC2",
+  cex = 0.7
+)
+
+dev.off()
+```
+
+### Biplot Interpretation
+
+The biplot displays the scores of the 263 players on PC1 and PC2 together with the predictor loadings.
+
+Variables related to career performance, such as `CAtBat`, `CHits`, `CRuns`, `CRBI`, `CWalks`, and `Years`, load strongly in the positive PC1 direction and generally in the negative PC2 direction. In contrast, current-season variables such as `AtBat`, `Hits`, `Runs`, and `RBI` load positively on both PC1 and PC2.
+
+This supports the earlier correlation analysis: **PC1 primarily represents overall career experience and accumulated performance**, while **PC2 helps distinguish current-season offensive performance from accumulated career performance**.
+
+Players located in the direction of a particular group of variables tend to have relatively larger values for those variables.
+
+## Conclusion
+
+PCA was applied to the standardized predictor variables in the Hitters dataset to reduce dimensionality and summarize the major patterns in the data.
+
+The first principal component explained approximately **38.31%** of the total variance, and the first two components together explained about **60.16%**. Based on the scree plot and cumulative variance, retaining approximately **4 principal components** provides a reasonable lower-dimensional representation, capturing about **79.03%** of the total variance.
+
+The interpretation of PC1 and PC2 showed that **PC1 primarily reflects career experience and accumulated performance**, while **PC2 is more strongly associated with current-season offensive performance relative to career totals**.
+
+Overall, the analysis demonstrates how PCA can summarize a large set of correlated baseball statistics using a smaller number of meaningful principal components.
+

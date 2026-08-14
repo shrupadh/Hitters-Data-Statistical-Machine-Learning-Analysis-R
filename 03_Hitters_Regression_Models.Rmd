@@ -1,0 +1,323 @@
+---
+title: "Regression Modeling of Player Salary"
+author: "Shradha Upadhyay"
+date: "2026-08-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Regression Modeling of Player Salary
+
+## Objective
+
+This analysis compares several regression methods for predicting player `Salary` using the Hitters dataset.
+
+The following methods are evaluated:
+
+- Multiple Linear Regression
+- Principal Components Regression (PCR)
+- Partial Least Squares (PLS)
+- Ridge Regression
+
+Leave-One-Out Cross-Validation (LOOCV) is used to compare prediction performance across the models.
+
+
+## Dataset Overview
+
+The `Hitters` dataset contains Major League Baseball player statistics and salary information.
+
+After removing observations with missing values, the analysis contains **263 players**. In this analysis, `Salary` is the response variable and the remaining variables are used as predictors.
+
+## Load and Prepare the Data
+# Load the Hitters dataset
+library(ISLR)
+
+data(Hitters)
+
+# Remove observations with missing values
+Hitters_clean <- na.omit(Hitters)
+```{r}
+# Load the Hitters dataset
+library(ISLR)
+
+data(Hitters)
+
+# Remove observations with missing values
+Hitters_clean <- na.omit(Hitters)
+
+# Check dimensions
+dim(Hitters_clean)
+```
+## (a) Multiple Linear Regression
+
+A multiple linear regression model is fitted using `Salary` as the response variable and all remaining variables as predictors.
+```{r}
+# Fit multiple linear regression using all predictors
+lm_model <- lm(Salary ~ ., data = Hitters_clean)
+
+# View model summary
+summary(lm_model)
+```
+### Linear Regression Model Interpretation
+
+The multiple linear regression model is statistically significant overall (**F-test p-value < 2.2e-16**), indicating that the predictors collectively provide information about player salary.
+
+The model has an **R² of 0.5461**, meaning that approximately **54.61% of the variation in Salary** is explained by the predictors. The adjusted R² is **0.5106**.
+
+At the 5% significance level, `AtBat`, `Hits`, `Walks`, `CWalks`, `DivisionW`, and `PutOuts` are statistically significant predictors of Salary.
+
+However, the primary goal of this analysis is to compare predictive performance across regression methods. Therefore, LOOCV prediction error is used for model comparison.
+
+### Leave-One-Out Cross-Validation (LOOCV)
+
+LOOCV is used to estimate the prediction error of the multiple linear regression model.
+```{r}
+# Calculate LOOCV prediction errors for the linear regression model
+
+lm_residuals <- residuals(lm_model)
+lm_leverage <- hatvalues(lm_model)
+
+loocv_errors_lm <- (lm_residuals / (1 - lm_leverage))^2
+
+loocv_mse_lm <- mean(loocv_errors_lm)
+
+loocv_mse_lm
+```
+### Linear Regression LOOCV Result
+
+The multiple linear regression model produced a LOOCV mean squared error (MSE) of approximately **118,039.7**. This value will be used as a baseline for comparing the predictive performance of PCR, PLS, and ridge regression.
+
+## (b) Principal Components Regression (PCR)
+
+Principal Components Regression (PCR) first applies PCA to the predictor variables and then uses the resulting principal components as predictors in a linear regression model.
+
+LOOCV is used to determine the number of principal components that provides the lowest prediction error.
+```{r}
+# Load package for PCR and PLS
+library(pls)
+```
+```{r}
+# Fit Principal Components Regression with LOOCV
+pcr_model <- pcr(
+  Salary ~ .,
+  data = Hitters_clean,
+  scale = TRUE,
+  validation = "LOO"
+)
+```
+
+
+```{r}
+# Save PCR LOOCV error plot
+png(
+  "Figures/pcr_loocv_msep.png",
+  width = 800,
+  height = 600
+)
+
+# Plot LOOCV prediction error for different numbers of PCs
+validationplot(
+  pcr_model,
+  val.type = "MSEP"
+)
+
+# Save and close the figure
+dev.off()
+```
+
+```{r}
+# Extract PCR LOOCV MSE values
+pcr_mse <- MSEP(pcr_model, estimate = "CV")$val[1, 1, ]
+# Remove the 0-component model
+pcr_mse_components <- pcr_mse[-1]
+# Find the number of PCs with minimum LOOCV MSE
+best_pcr_M <- which.min(pcr_mse_components)
+# Minimum LOOCV MSE
+best_pcr_mse <- min(pcr_mse_components)
+
+best_pcr_M
+best_pcr_mse
+```
+### PCR LOOCV Result
+
+LOOCV selected **16 principal components** as the optimal PCR model. The minimum cross-validated MSE was approximately **115,298**.
+
+This is slightly lower than the multiple linear regression LOOCV MSE of **118,039.7**, indicating that PCR provided a modest improvement in prediction performance.
+
+## (c) Partial Least Squares (PLS)
+
+Partial Least Squares (PLS) constructs components using the predictor variables while also considering their relationship with the response variable, `Salary`.
+
+LOOCV is used to select the optimal number of PLS components and estimate the test MSE.
+```{r}
+# Fit PLS regression with LOOCV
+pls_model <- plsr(
+  Salary ~ .,
+  data = Hitters_clean,
+  scale = TRUE,
+  validation = "LOO"
+)
+```
+
+```{r}
+# Save PLS LOOCV error plot
+png(
+  "Figures/pls_loocv_msep.png",
+  width = 800,
+  height = 600
+)
+
+# Plot LOOCV prediction error for different numbers of PLS components
+validationplot(
+  pls_model,
+  val.type = "MSEP"
+)
+
+# Save and close the figure
+dev.off()
+```
+```{r}
+#Find optimal number of PLS components
+# Extract PLS LOOCV MSE values
+pls_mse <- MSEP(pls_model, estimate = "CV")$val[1, 1, ]
+
+# Remove the 0-component model
+pls_mse_components <- pls_mse[-1]
+
+# Find the optimal number of PLS components
+best_pls_M <- which.min(pls_mse_components)
+
+# Find the minimum LOOCV MSE
+best_pls_mse <- min(pls_mse_components)
+
+# Display results
+best_pls_M
+best_pls_mse
+```
+### PLS LOOCV Result
+
+LOOCV selected **12 components** as the optimal PLS model. The minimum cross-validated MSE was approximately **114,847**.
+
+This MSE is slightly lower than the PCR MSE of **115,298** and the multiple linear regression MSE of **118,039.7**. Therefore, PLS currently provides the lowest estimated prediction error among the models considered.
+
+## (d) Ridge Regression
+
+Ridge regression applies an L2 penalty to the regression coefficients to reduce their magnitude and control model complexity.
+
+Leave-One-Out Cross-Validation (LOOCV) is used to select the optimal penalty parameter, lambda (λ), based on prediction error.
+```{r}
+# Load package for ridge regression
+library(glmnet)
+```
+```{r}
+# Create numeric predictor matrix
+x_ridge <- model.matrix(Salary ~ ., data = Hitters_clean)[, -1]
+
+# Create response vector
+y_ridge <- Hitters_clean$Salary
+
+# Check dimensions
+dim(x_ridge)
+length(y_ridge)
+```
+```{r}
+# Perform Ridge Regression with LOOCV
+
+set.seed(123)
+
+ridge_cv <- cv.glmnet(
+  x = x_ridge,
+  y = y_ridge,
+  alpha = 0,
+  nfolds = nrow(x_ridge),
+  standardize = TRUE
+  
+)
+
+# Optimal lambda selected by minimum LOOCV error
+best_lambda <- ridge_cv$lambda.min
+
+# Minimum LOOCV MSE
+best_ridge_mse <- min(ridge_cv$cvm)
+
+# Display results
+best_lambda
+best_ridge_mse
+```
+### Ridge Regression LOOCV Result
+
+LOOCV selected an optimal ridge penalty parameter of **λ = 25.53**. The corresponding minimum cross-validated MSE was approximately **115,547.4**.
+
+Ridge regression improved upon the multiple linear regression model, which had a LOOCV MSE of **118,039.7**. However, its prediction error was slightly higher than both PCR (**115,298**) and PLS (**114,847**).
+
+Among the four models considered, PLS produced the lowest LOOCV MSE.
+
+### Ridge Regression Cross-Validation
+The cross-validation plot shows how the LOOCV prediction error changes across different values of the ridge penalty parameter, λ.
+```{r}
+# Save Ridge LOOCV plot
+png(
+  "Figures/ridge_loocv.png",
+  width = 800,
+  height = 600
+)
+
+# Plot cross-validation error across lambda values
+plot(ridge_cv)
+
+# Save and close the figure
+dev.off()
+```
+## (e) Model Comparison
+```{r}
+# Create comparison table for all four regression models
+
+model_comparison <- data.frame(
+  Model = c(
+    "Multiple Linear Regression",
+    "PCR",
+    "PLS",
+    "Ridge Regression"
+  ),
+  
+  Selected_Parameter = c(
+    "All predictors",
+    paste(best_pcr_M, "PCs"),
+    paste(best_pls_M, "components"),
+    paste0("lambda = ", round(best_lambda, 2))
+  ),
+  
+  LOOCV_MSE = c(
+    loocv_mse_lm,
+    best_pcr_mse,
+    best_pls_mse,
+    best_ridge_mse
+  )
+)
+
+# Round MSE
+model_comparison$LOOCV_MSE <- round(
+  model_comparison$LOOCV_MSE,
+  1
+)
+
+model_comparison
+```
+### Model Comparison and Recommendation
+
+The four regression methods produced relatively similar LOOCV prediction errors. However, **PLS achieved the lowest LOOCV MSE of approximately 114,847**, using 12 components.
+
+PCR produced the second-lowest MSE of approximately 115,298 using 16 principal components, followed closely by ridge regression with an MSE of approximately 115,547. Multiple linear regression had the highest MSE at approximately 118,040.
+
+Based on the LOOCV results, **PLS is recommended because it achieved the lowest estimated test MSE**. However, the differences among PLS, PCR, and ridge regression are relatively small, suggesting that all three provide similar predictive performance on this dataset.
+
+## Conclusion
+
+This analysis compared multiple linear regression, PCR, PLS, and ridge regression for predicting player Salary using the Hitters dataset.
+
+LOOCV was used to estimate test prediction error and to select the tuning parameters for PCR, PLS, and ridge regression. PCR selected 16 principal components, PLS selected 12 components, and ridge regression selected an optimal lambda of approximately 25.53.
+
+Among the four models, **PLS achieved the lowest LOOCV MSE (114,847)** and is therefore the preferred model based on estimated prediction performance. PCR and ridge regression performed very similarly, while multiple linear regression had a slightly higher prediction error.

@@ -1,0 +1,320 @@
+---
+title: "Clustering Analysis of the Hitters Dataset"
+author: "Shradha Upadhyay"
+date: "2026-08-13"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Clustering Analysis of the Hitters Dataset
+
+## Objective
+
+This analysis applies unsupervised clustering methods to the Hitters dataset to identify groups of players with similar characteristics.
+
+Two clustering approaches are considered:
+
+- Hierarchical clustering using complete linkage
+- K-means clustering with K = 2
+
+The resulting clusters are compared and interpreted using player characteristics and mean salary.
+## Dataset Overview
+
+The `Hitters` dataset from the **ISLR** package contains Major League Baseball player statistics and salary information.
+
+After removing observations with missing values, the dataset contains **263 players and 20 variables**. `Salary` is used to summarize the resulting clusters but is not used to form the clusters.
+
+## Load and Prepare the Data
+```{r}
+# Load the Hitters dataset
+library(ISLR)
+
+data(Hitters)
+
+# Remove observations with missing values
+Hitters_clean <- na.omit(Hitters)
+
+# Check dimensions
+dim(Hitters_clean)
+```
+## (a) Should the Variables Be Standardized?
+
+Yes. Standardization is important before clustering because the Hitters variables are measured on very different scales. For example, career statistics such as `CAtBat` can have values in the thousands, while variables such as `Years` have much smaller values.
+
+Because distance-based clustering is affected by the scale of the variables, predictors with larger numerical ranges could dominate the distance calculations. Standardizing the variables to mean 0 and standard deviation 1 allows each predictor to contribute on a comparable scale.
+## (b) Choice of Distance Measure
+
+A **metric-based distance**, specifically Euclidean distance, is appropriate for clustering the players. The goal is to group players who are similar in their standardized baseball statistics.
+Because the variables are standardized before clustering, Euclidean distance can compare players across the different predictor variables without variables with larger scales dominating the distance calculation.
+## (c) Hierarchical Clustering
+
+The players are clustered using the predictor variables only. `Salary` is excluded from the clustering variables and will later be used to compare the resulting clusters.
+```{r}
+# Remove Salary and keep only predictor variables
+X <- Hitters_clean[, names(Hitters_clean) != "Salary"]
+
+# Check dimensions
+dim(X)
+```
+```{r}
+# Convert categorical predictors to dummy variables
+X_numeric <- model.matrix(~ ., data = X)[, -1]
+
+# Check dimensions
+dim(X_numeric)
+```
+### Standardize the Predictor Variables
+
+The predictor variables are standardized before clustering so that variables measured on larger scales do not dominate the Euclidean distance calculation.
+```{r}
+# Standardize the predictor variables
+X_scaled <- scale(X_numeric)
+
+# Check dimensions
+dim(X_scaled)
+```
+### Calculate Euclidean Distance
+
+Euclidean distance is calculated between players using their standardized predictor values. Players with smaller distances have more similar baseball characteristics.
+```{r}
+# Calculate Euclidean distance between players
+distance_matrix <- dist(X_scaled, method = "euclidean")
+
+# View the first few distances
+head(distance_matrix)
+```
+### Complete-Linkage Hierarchical Clustering
+
+Hierarchical clustering is performed using complete linkage and the Euclidean distances calculated from the standardized predictor variables.
+```{r}
+# Perform hierarchical clustering using complete linkage
+hc_complete <- hclust(
+  distance_matrix,
+  method = "complete"
+)
+
+# View clustering result
+hc_complete
+```
+### Hierarchical Clustering Dendrogram
+
+The dendrogram shows how individual players and clusters of players are progressively joined based on their similarity.
+
+```{r}
+# Save hierarchical clustering dendrogram
+png(
+  "Figures/clustering_hierarchical_dendrogram.png",
+  width = 900,
+  height = 650
+)
+
+# Plot dendrogram
+plot(
+  hc_complete,
+  labels = FALSE,
+  main = "Complete-Linkage Hierarchical Clustering",
+  xlab = "Players",
+  ylab = "Height"
+)
+
+# Highlight the two clusters
+rect.hclust(
+  hc_complete,
+  k = 2,
+  border = 2:3
+)
+
+# Close and save the figure
+dev.off()
+```
+### Cut the Dendrogram into Two Clusters
+
+The hierarchical clustering tree is cut to produce two distinct groups of players.
+```{r}
+# Cut the dendrogram into 2 clusters
+hc_clusters <- cutree(hc_complete, k = 2)
+
+# Check the number of players in each cluster
+table(hc_clusters)
+```
+```{r}
+
+# Save hierarchical clustering dendrogram
+png(
+  "Figures/clustering_hierarchical_dendrogram.png",
+  width = 900,
+  height = 650
+)
+
+# Plot dendrogram
+plot(
+  hc_complete,
+  labels = FALSE,
+  main = "Complete-Linkage Hierarchical Clustering",
+  xlab = "Players",
+  ylab = "Height"
+)
+
+# Highlight the two clusters
+rect.hclust(
+  hc_complete,
+  k = 2,
+  border = 2:3
+)
+
+# Save and close the figure
+dev.off()
+```
+### Cluster-Specific Means
+
+To interpret the two clusters, the mean values of the quantitative player characteristics are compared across the hierarchical clusters.
+```{r}
+# Select quantitative predictor variables
+quantitative_vars <- names(X)[sapply(X, is.numeric)]
+
+X_quantitative <- X[, quantitative_vars]
+
+# Check dimensions
+dim(X_quantitative)
+```
+```{r}
+# Add hierarchical cluster labels
+Hitters_clean$HC_Cluster <- factor(hc_clusters)
+
+# Calculate cluster-specific means
+hc_means <- aggregate(
+  X_quantitative,
+  by = list(Cluster = Hitters_clean$HC_Cluster),
+  FUN = mean
+)
+
+# Round only numeric columns
+hc_means[, -1] <- round(hc_means[, -1], 2)
+
+# Display cluster means
+hc_means
+```
+### Mean Salary by Cluster
+
+The mean salary of players in each cluster is calculated to examine whether the groups identified by hierarchical clustering also differ in salary.
+
+```{r}
+# Calculate mean salary for each hierarchical cluster
+hc_salary <- aggregate(
+  Salary ~ HC_Cluster,
+  data = Hitters_clean,
+  FUN = mean
+)
+
+# Round mean salaries
+hc_salary$Salary <- round(hc_salary$Salary, 2)
+
+# Display results
+hc_salary
+```
+
+### Hierarchical Clustering Interpretation
+
+Complete-linkage hierarchical clustering separated the 263 players into two clusters containing **233** and **30** players.
+
+The current-season statistics, such as `AtBat`, `Hits`, and `Runs`, were relatively similar between the two clusters. However, Cluster 2 showed substantially higher career statistics and experience. For example, the average number of `Years` was **15.83** in Cluster 2 compared with **6.21** in Cluster 1, while average career at-bats (`CAtBat`) were **7,233.50** compared with **2,068.36**.
+
+The mean salary was also substantially higher in Cluster 2 (**970.68**) than in Cluster 1 (**479.95**).
+
+Overall, the hierarchical clustering primarily separates a smaller group of **highly experienced players with large accumulated career statistics and higher salaries** from a larger group of players with less career experience and lower average salaries.
+
+## (d) K-Means Clustering with K = 2
+
+K-means clustering is performed on the standardized predictor variables using two clusters. The resulting clusters are summarized using the player characteristics and mean salary.
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+
+# Perform K-means clustering with K = 2
+kmeans_result <- kmeans(
+  X_scaled,
+  centers = 2,
+  nstart = 25
+)
+
+# Number of players in each cluster
+table(kmeans_result$cluster)
+```
+```{r}
+# Add K-means cluster labels
+Hitters_clean$KMeans_Cluster <- factor(kmeans_result$cluster)
+
+# Calculate cluster-specific means for quantitative predictors
+kmeans_means <- aggregate(
+  X_quantitative,
+  by = list(Cluster = Hitters_clean$KMeans_Cluster),
+  FUN = mean
+)
+
+# Round numeric columns
+kmeans_means[, -1] <- round(kmeans_means[, -1], 2)
+
+# Display cluster means
+kmeans_means
+```
+
+```{r}
+# Calculate mean salary for each K-means cluster
+kmeans_salary <- aggregate(
+  Salary ~ KMeans_Cluster,
+  data = Hitters_clean,
+  FUN = mean
+)
+
+# Round mean salary
+kmeans_salary$Salary <- round(kmeans_salary$Salary, 2)
+
+# Display results
+kmeans_salary
+```
+### K-Means Clustering Interpretation
+
+K-means clustering with K = 2 divided the 263 players into **189 players in Cluster 1** and **74 players in Cluster 2**.
+
+Cluster 2 had higher average current-season statistics, greater career experience, and substantially larger career totals than Cluster 1. For example, Cluster 2 had higher average `Hits`, `HmRun`, `RBI`, `Years`, `CAtBat`, and `CHits`.
+
+The mean salary was also substantially different between the groups. Cluster 1 had a mean salary of **368.55**, whereas Cluster 2 had a mean salary of **963.40**.
+
+Overall, K-means separated the players into a group with generally lower performance and experience and a group of more experienced, higher-performing players with substantially higher average salaries.
+## (e) Comparison of Hierarchical and K-Means Clustering
+
+The cluster assignments from hierarchical clustering and K-means clustering are compared to determine how similarly the two methods grouped the players.
+
+```{r}
+# Compare hierarchical and K-means cluster assignments
+cluster_comparison <- table(
+  Hierarchical = hc_clusters,
+  KMeans = kmeans_result$cluster
+)
+
+cluster_comparison
+
+```
+### Comparison of Cluster Assignments
+
+The two clustering methods showed substantial agreement in their cluster assignments.
+
+All **189 players** assigned to K-means Cluster 1 were also assigned to hierarchical Cluster 1. In addition, all **30 players** in hierarchical Cluster 2 were also assigned to K-means Cluster 2.
+
+However, **44 players** assigned to hierarchical Cluster 1 were placed in K-means Cluster 2. Therefore, K-means produced a larger second cluster than hierarchical clustering.
+
+Overall, both methods identified a common group of 30 players, while K-means classified an additional 44 players into the higher-performance and more experienced group.
+## Conclusion
+
+Both hierarchical clustering and K-means clustering identified meaningful groups of players based on their standardized baseball statistics.
+
+Complete-linkage hierarchical clustering produced two clusters containing **233 and 30 players**. The smaller cluster consisted primarily of more experienced players with substantially larger career statistics and a higher mean salary (**970.68 vs. 479.95**).
+
+K-means clustering with K = 2 produced clusters containing **189 and 74 players**. The second cluster also represented more experienced, higher-performing players and had a substantially higher mean salary (**963.40 vs. 368.55**).
+
+The two methods agreed on a core group of **30 players**, while K-means assigned an additional **44 players** to its higher-performance cluster.
+
+Overall, both clustering approaches revealed a relationship between player experience, career performance, and salary, although the exact cluster assignments differed between the two methods.
